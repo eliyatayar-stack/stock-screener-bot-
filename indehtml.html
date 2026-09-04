@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screener Bot v2 - לוח בקרה</title>
+    <!-- External Libraries -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0b57d0;
+            --on-primary: #fff;
+            --primary-container: #d3e3fd;
+            --on-primary-container: #041e49;
+            --surface: #fff;
+            --surface-container: #f0f4f9;
+            --surface-container-high: #e9ebf0;
+            --on-surface-default: #1b1c1d;
+            --on-surface-de-emphasis: #444746;
+            --success: #146c2e;
+            --success-surface: #c4eed0;
+            --error: #b3261e;
+            --error-surface: #ffcdd2;
+            --warning: #b06000;
+            --warning-surface: #ffe0b2;
+            --ff-sans: "Google Sans", "Roboto", sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #a8c7fa;
+                --on-primary: #062e6f;
+                --primary-container: #1f3760;
+                --on-primary-container: #d3e3fd;
+                --surface: #101218;
+                --surface-container: #202124;
+                --surface-container-high: #2d2f31;
+                --on-surface-default: #fff;
+                --on-surface-de-emphasis: #c4c7c5;
+                --success: #6dd58c;
+                --success-surface: #0f5223;
+                --error: #f2b8b5;
+                --error-surface: #601410;
+                --warning: #ffb74d;
+                --warning-surface: #5d4037;
+            }
+        }
+
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: var(--ff-sans);
+            background: var(--surface-container);
+            color: var(--on-surface-default);
+            overflow: auto;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            min-height: 100vh;
+            gap: 20px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Sidebar Control Panel */
+        .sidebar {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: fit-content;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .filter-section {
+            border-top: 1px solid var(--surface-container-high);
+            padding-top: 16px;
+        }
+
+        .filter-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--on-surface-de-emphasis);
+            margin-bottom: 12px;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Custom Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-switch {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--surface-container-high);
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider-switch:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--on-surface-de-emphasis);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider-switch {
+            background-color: var(--primary);
+        }
+
+        input:checked + .slider-switch:before {
+            transform: translateX(20px);
+            background-color: var(--on-primary);
+        }
+
+        /* Main Feed Panel */
+        .main-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .stats-banner {
+            display: flex;
+            gap: 15px;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .stat-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding-right: 15px;
+            border-right: 4px solid var(--primary);
+        }
+
+        .stat-card.success-border {
+            border-right-color: var(--success);
+        }
+
+        .stat-val {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-lbl {
+            font-size: 12px;
+            color: var(--on-surface-de-emphasis);
+        }
+
+        /* Signal Cards Feed */
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .signal-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border: 1px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .signal-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge.breakout {
+            background: var(--error-surface);
+            color: var(--error);
+        }
+
+        .badge.support {
+            background: var(--success-surface);
+            color: var(--success);
+        }
+
+        .badge.pullback {
+            background: var(--warning-surface);
+            color: var(--warning);
+        }
+
+        .ticker-name {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface-container);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .trading-plan {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-top: 1px solid var(--surface-container-high);
+            padding-top: 12px;
+            font-size: 13px;
+        }
+
+        .plan-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .btn-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            border: none;
+            padding: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: filter 0.2s;
+        }
+
+        .btn-link:hover {
+            filter: brightness(0.95);
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <!-- Sidebar Control Panel -->
+    <div class="sidebar">
+        <div class="sidebar-title">
+            <span class="material-icons">filter_alt</span>
+            <span>סינון מניות חכם</span>
+        </div>
+
+        <!-- Fundamental Filters -->
+        <div class="filter-section">
+            <div class="filter-section-title">סינון פונדמנטלי (כלכלי)</div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--primary)">monetization_on</span>
+                    <span>חברות רווחיות בלבד (P/E > 0)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="profitable-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--primary)">percent</span>
+                    <span>מכפיל רווח סביר (P/E < 35)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="pe-limit-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Technical Filters -->
+        <div class="filter-section">
+            <div class="filter-section-title">סינון טכני (גרף)</div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--success)">trending_up</span>
+                    <span>מחיר מעל ממוצע נע 200</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="ma-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--warning)">speed</span>
+                    <span>מניעת קניית יתר (RSI < 70)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="rsi-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Panel Feed -->
+    <div class="main-panel">
+        <div class="stats-banner">
+            <div class="stat-card">
+                <div class="stat-val" id="total-scanned">500</div>
+                <div class="stat-lbl">מניות נסרקו בסה"כ</div>
+            </div>
+            <div class="stat-card success-border">
+                <div class="stat-val" id="total-matches">3</div>
+                <div class="stat-lbl">עומדות בתנאי הסינון שלך</div>
+            </div>
+        </div>
+
+        <!-- Cards Feed -->
+        <div class="signals-grid" id="signals-container">
+            <!-- Simulated Signal Cards will load here -->
+        </div>
+    </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+    function updateDashboard() {
+        // בודק אם קובץ הנתונים (data.js) נטען בהצלחה מהבוט
+        if (typeof STOCK_DATABASE === 'undefined') {
+            const container = document.getElementById("signals-container");
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--on-surface-de-emphasis)">
+                    <span class="material-icons" style="font-size: 48px; margin-bottom: 10px;">hourglass_empty</span>
+                    <div style="font-size: 18px; font-weight: bold;">ממתין לנתונים...</div>
+                    <div style="margin-top: 10px;">הפעל את הבוט (main.py) כדי שיסרוק את השוק וייצור את קובץ הנתונים (data.js).<br>רענן את העמוד כשהוא יסיים!</div>
+                </div>
+            `;
+            document.getElementById("total-scanned").innerText = "500";
+            document.getElementById("total-matches").innerText = "0";
+            return;
+        }
+
+        const profitableOnly = document.getElementById("profitable-toggle").checked;
+        const peLimit = document.getElementById("pe-limit-toggle").checked;
+        const maOnly = document.getElementById("ma-toggle").checked;
+        const rsiLimit = document.getElementById("rsi-toggle").checked;
+
+        // Filter the database
+        const matches = STOCK_DATABASE.filter(stock => {
+            if (profitableOnly && stock.pe <= 0) return false;
+            if (peLimit && stock.pe > 35) return false;
+            if (maOnly && !stock.aboveMA200) return false;
+            if (rsiLimit && stock.rsi >= 70) return false;
+            return true;
+        });
+
+        // Update Stats
+        document.getElementById("total-matches").innerText = matches.length;
+
+        // Render Cards
+        const container = document.getElementById("signals-container");
+        container.innerHTML = "";
+
+        if (matches.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--on-surface-de-emphasis)">
+                    <span class="material-icons" style="font-size: 48px; margin-bottom: 10px;">info</span>
+                    <div>אין מניות שעונות על כל התנאים כרגע. נסה לרכך את הסינון.</div>
+                </div>
+            `;
+            return;
+        }
+
+        matches.forEach(stock => {
+            const card = document.createElement("div");
+            card.className = "signal-card";
+            
+            let badgeClass = stock.setup;
+            let setupText = stock.setupLabel;
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="ticker-name">${stock.ticker}</span>
+                    <span class="badge ${badgeClass}">${setupText}</span>
+                </div>
+                <div style="font-size: 13px; color: var(--on-surface-de-emphasis)">${stock.name}</div>
+                <div class="price-row">
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">מחיר</div>
+                        <div style="font-weight: 700; font-size: 16px;">$${stock.price.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">RSI</div>
+                        <div style="font-weight: 700;">${stock.rsi}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">מכפיל P/E</div>
+                        <div style="font-weight: 700;">${stock.pe.toFixed(1)}</div>
+                    </div>
+                </div>
+                <div class="trading-plan">
+                    <div style="font-weight: bold; margin-bottom: 5px;">🎯 תוכנית מסחר מוצעת:</div>
+                    <div class="plan-item">
+                        <span>יעד קרוב (TP1):</span>
+                        <span style="color: var(--success); font-weight: bold;">$${stock.tp1}</span>
+                    </div>
+                    <div class="plan-item">
+                        <span>יעד רחוק (TP2):</span>
+                        <span style="color: var(--success); font-weight: bold;">$${stock.tp2}</span>
+                    </div>
+                    <div class="plan-item">
+                        <span>קו הגנה (SL):</span>
+                        <span style="color: var(--error); font-weight: bold;">$${stock.sl}</span>
+                    </div>
+                </div>
+                ${stock.newsTitle ? `
+                <div style="margin-top: 12px; padding: 10px; background: var(--surface-container-high); border-radius: 8px; font-size: 13px;">
+                    <div style="font-weight: bold; margin-bottom: 4px; color: var(--primary);">📰 חדשות חמות:</div>
+                    <a href="${stock.newsLink}" target="_blank" style="color: var(--on-surface-default); text-decoration: none;">${stock.newsTitle}</a>
+                </div>
+                ` : ''}
+                <a href="https://finance.yahoo.com/quote/${stock.ticker}/chart" target="_blank" class="btn-link" style="margin-top: 12px;">
+                    <span class="material-icons" style="font-size: 16px;">show_chart</span>
+                    <span>צפה בגרף מניה</span>
+                </a>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // Initial load
+    updateDashboard();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screener Bot v2 - לוח בקרה</title>
+    <!-- External Libraries -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0b57d0;
+            --on-primary: #fff;
+            --primary-container: #d3e3fd;
+            --on-primary-container: #041e49;
+            --surface: #fff;
+            --surface-container: #f0f4f9;
+            --surface-container-high: #e9ebf0;
+            --on-surface-default: #1b1c1d;
+            --on-surface-de-emphasis: #444746;
+            --success: #146c2e;
+            --success-surface: #c4eed0;
+            --error: #b3261e;
+            --error-surface: #ffcdd2;
+            --warning: #b06000;
+            --warning-surface: #ffe0b2;
+            --ff-sans: "Google Sans", "Roboto", sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #a8c7fa;
+                --on-primary: #062e6f;
+                --primary-container: #1f3760;
+                --on-primary-container: #d3e3fd;
+                --surface: #101218;
+                --surface-container: #202124;
+                --surface-container-high: #2d2f31;
+                --on-surface-default: #fff;
+                --on-surface-de-emphasis: #c4c7c5;
+                --success: #6dd58c;
+                --success-surface: #0f5223;
+                --error: #f2b8b5;
+                --error-surface: #601410;
+                --warning: #ffb74d;
+                --warning-surface: #5d4037;
+            }
+        }
+
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: var(--ff-sans);
+            background: var(--surface-container);
+            color: var(--on-surface-default);
+            overflow: auto;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            min-height: 100vh;
+            gap: 20px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Sidebar Control Panel */
+        .sidebar {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: fit-content;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .filter-section {
+            border-top: 1px solid var(--surface-container-high);
+            padding-top: 16px;
+        }
+
+        .filter-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--on-surface-de-emphasis);
+            margin-bottom: 12px;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Custom Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-switch {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--surface-container-high);
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider-switch:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--on-surface-de-emphasis);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider-switch {
+            background-color: var(--primary);
+        }
+
+        input:checked + .slider-switch:before {
+            transform: translateX(20px);
+            background-color: var(--on-primary);
+        }
+
+        /* Main Feed Panel */
+        .main-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .stats-banner {
+            display: flex;
+            gap: 15px;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .stat-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding-right: 15px;
+            border-right: 4px solid var(--primary);
+        }
+
+        .stat-card.success-border {
+            border-right-color: var(--success);
+        }
+
+        .stat-val {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-lbl {
+            font-size: 12px;
+            color: var(--on-surface-de-emphasis);
+        }
+
+        /* Signal Cards Feed */
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .signal-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border: 1px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .signal-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge.breakout {
+            background: var(--error-surface);
+            color: var(--error);
+        }
+
+        .badge.support {
+            background: var(--success-surface);
+            color: var(--success);
+        }
+
+        .badge.pullback {
+            background: var(--warning-surface);
+            color: var(--warning);
+        }
+
+        .ticker-name {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface-container);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .trading-plan {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-top: 1px solid var(--surface-container-high);
+            padding-top: 12px;
+            font-size: 13px;
+        }
+
+        .plan-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .btn-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            border: none;
+            padding: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: filter 0.2s;
+        }
+
+        .btn-link:hover {
+            filter: brightness(0.95);
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <!-- Sidebar Control Panel -->
+    <div class="sidebar">
+        <div class="sidebar-title">
+            <span class="material-icons">filter_alt</span>
+            <span>סינון מניות חכם</span>
+        </div>
+
+        <!-- Fundamental Filters -->
+        <div class="filter-section">
+            <div class="filter-section-title">סינון פונדמנטלי (כלכלי)</div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--primary)">monetization_on</span>
+                    <span>חברות רווחיות בלבד (P/E > 0)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="profitable-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--primary)">percent</span>
+                    <span>מכפיל רווח סביר (P/E < 35)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="pe-limit-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Technical Filters -->
+        <div class="filter-section">
+            <div class="filter-section-title">סינון טכני (גרף)</div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--success)">trending_up</span>
+                    <span>מחיר מעל ממוצע נע 200</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="ma-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--warning)">speed</span>
+                    <span>מניעת קניית יתר (RSI < 70)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="rsi-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Panel Feed -->
+    <div class="main-panel">
+        <div class="stats-banner">
+            <div class="stat-card">
+                <div class="stat-val" id="total-scanned">500</div>
+                <div class="stat-lbl">מניות נסרקו בסה"כ</div>
+            </div>
+            <div class="stat-card success-border">
+                <div class="stat-val" id="total-matches">3</div>
+                <div class="stat-lbl">עומדות בתנאי הסינון שלך</div>
+            </div>
+        </div>
+
+        <!-- Cards Feed -->
+        <div class="signals-grid" id="signals-container">
+            <!-- Simulated Signal Cards will load here -->
+        </div>
+    </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+    function updateDashboard() {
+        // בודק אם קובץ הנתונים (data.js) נטען בהצלחה מהבוט
+        if (typeof STOCK_DATABASE === 'undefined') {
+            const container = document.getElementById("signals-container");
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--on-surface-de-emphasis)">
+                    <span class="material-icons" style="font-size: 48px; margin-bottom: 10px;">hourglass_empty</span>
+                    <div style="font-size: 18px; font-weight: bold;">ממתין לנתונים...</div>
+                    <div style="margin-top: 10px;">הפעל את הבוט (main.py) כדי שיסרוק את השוק וייצור את קובץ הנתונים (data.js).<br>רענן את העמוד כשהוא יסיים!</div>
+                </div>
+            `;
+            document.getElementById("total-scanned").innerText = "500";
+            document.getElementById("total-matches").innerText = "0";
+            return;
+        }
+
+        const profitableOnly = document.getElementById("profitable-toggle").checked;
+        const peLimit = document.getElementById("pe-limit-toggle").checked;
+        const maOnly = document.getElementById("ma-toggle").checked;
+        const rsiLimit = document.getElementById("rsi-toggle").checked;
+
+        // Filter the database
+        const matches = STOCK_DATABASE.filter(stock => {
+            if (profitableOnly && stock.pe <= 0) return false;
+            if (peLimit && stock.pe > 35) return false;
+            if (maOnly && !stock.aboveMA200) return false;
+            if (rsiLimit && stock.rsi >= 70) return false;
+            return true;
+        });
+
+        // Update Stats
+        document.getElementById("total-matches").innerText = matches.length;
+
+        // Render Cards
+        const container = document.getElementById("signals-container");
+        container.innerHTML = "";
+
+        if (matches.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--on-surface-de-emphasis)">
+                    <span class="material-icons" style="font-size: 48px; margin-bottom: 10px;">info</span>
+                    <div>אין מניות שעונות על כל התנאים כרגע. נסה לרכך את הסינון.</div>
+                </div>
+            `;
+            return;
+        }
+
+        matches.forEach(stock => {
+            const card = document.createElement("div");
+            card.className = "signal-card";
+            
+            let badgeClass = stock.setup;
+            let setupText = stock.setupLabel;
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="ticker-name">${stock.ticker}</span>
+                    <span class="badge ${badgeClass}">${setupText}</span>
+                </div>
+                <div style="font-size: 13px; color: var(--on-surface-de-emphasis)">${stock.name}</div>
+                <div class="price-row">
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">מחיר</div>
+                        <div style="font-weight: 700; font-size: 16px;">$${stock.price.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">RSI</div>
+                        <div style="font-weight: 700;">${stock.rsi}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">מכפיל P/E</div>
+                        <div style="font-weight: 700;">${stock.pe.toFixed(1)}</div>
+                    </div>
+                </div>
+                <div class="trading-plan">
+                    <div style="font-weight: bold; margin-bottom: 5px;">🎯 תוכנית מסחר מוצעת:</div>
+                    <div class="plan-item">
+                        <span>יעד קרוב (TP1):</span>
+                        <span style="color: var(--success); font-weight: bold;">$${stock.tp1}</span>
+                    </div>
+                    <div class="plan-item">
+                        <span>יעד רחוק (TP2):</span>
+                        <span style="color: var(--success); font-weight: bold;">$${stock.tp2}</span>
+                    </div>
+                    <div class="plan-item">
+                        <span>קו הגנה (SL):</span>
+                        <span style="color: var(--error); font-weight: bold;">$${stock.sl}</span>
+                    </div>
+                </div>
+                ${stock.earnings && stock.earnings !== 'לא ידוע' && stock.earnings.includes('⚠️') ? `
+                <div style="margin-top: 12px; padding: 6px 10px; background: var(--warning-surface); color: var(--warning); border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 5px; font-weight: 500;">
+                    <span class="material-icons" style="font-size: 16px;">event</span>
+                    <span>${stock.earnings}</span>
+                </div>
+                ` : ''}
+                ${stock.newsTitle ? `
+                <div style="margin-top: 12px; padding: 10px; background: var(--surface-container-high); border-radius: 8px; font-size: 13px;">
+                    <div style="font-weight: bold; margin-bottom: 4px; color: var(--primary);">📰 חדשות חמות:</div>
+                    <a href="${stock.newsLink}" target="_blank" style="color: var(--on-surface-default); text-decoration: none;">${stock.newsTitle}</a>
+                </div>
+                ` : ''}
+                <a href="https://finance.yahoo.com/quote/${stock.ticker}/chart" target="_blank" class="btn-link" style="margin-top: 12px;">
+                    <span class="material-icons" style="font-size: 16px;">show_chart</span>
+                    <span>צפה בגרף מניה</span>
+                </a>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // Initial load
+    updateDashboard();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screener Bot v2 - לוח בקרה</title>
+    <!-- External Libraries -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #0b57d0;
+            --on-primary: #fff;
+            --primary-container: #d3e3fd;
+            --on-primary-container: #041e49;
+            --surface: #fff;
+            --surface-container: #f0f4f9;
+            --surface-container-high: #e9ebf0;
+            --on-surface-default: #1b1c1d;
+            --on-surface-de-emphasis: #444746;
+            --success: #146c2e;
+            --success-surface: #c4eed0;
+            --error: #b3261e;
+            --error-surface: #ffcdd2;
+            --warning: #b06000;
+            --warning-surface: #ffe0b2;
+            --ff-sans: "Google Sans", "Roboto", sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #a8c7fa;
+                --on-primary: #062e6f;
+                --primary-container: #1f3760;
+                --on-primary-container: #d3e3fd;
+                --surface: #101218;
+                --surface-container: #202124;
+                --surface-container-high: #2d2f31;
+                --on-surface-default: #fff;
+                --on-surface-de-emphasis: #c4c7c5;
+                --success: #6dd58c;
+                --success-surface: #0f5223;
+                --error: #f2b8b5;
+                --error-surface: #601410;
+                --warning: #ffb74d;
+                --warning-surface: #5d4037;
+            }
+        }
+
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: var(--ff-sans);
+            background: var(--surface-container);
+            color: var(--on-surface-default);
+            overflow: auto;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            min-height: 100vh;
+            gap: 20px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Sidebar Control Panel */
+        .sidebar {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: fit-content;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .filter-section {
+            border-top: 1px solid var(--surface-container-high);
+            padding-top: 16px;
+        }
+
+        .filter-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--on-surface-de-emphasis);
+            margin-bottom: 12px;
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Custom Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider-switch {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--surface-container-high);
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider-switch:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--on-surface-de-emphasis);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider-switch {
+            background-color: var(--primary);
+        }
+
+        input:checked + .slider-switch:before {
+            transform: translateX(20px);
+            background-color: var(--on-primary);
+        }
+
+        /* Main Feed Panel */
+        .main-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .stats-banner {
+            display: flex;
+            gap: 15px;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .stat-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding-right: 15px;
+            border-right: 4px solid var(--primary);
+        }
+
+        .stat-card.success-border {
+            border-right-color: var(--success);
+        }
+
+        .stat-val {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-lbl {
+            font-size: 12px;
+            color: var(--on-surface-de-emphasis);
+        }
+
+        /* Signal Cards Feed */
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .signal-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border: 1px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .signal-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge.breakout {
+            background: var(--error-surface);
+            color: var(--error);
+        }
+
+        .badge.support {
+            background: var(--success-surface);
+            color: var(--success);
+        }
+
+        .badge.pullback {
+            background: var(--warning-surface);
+            color: var(--warning);
+        }
+
+        .ticker-name {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface-container);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .trading-plan {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-top: 1px solid var(--surface-container-high);
+            padding-top: 12px;
+            font-size: 13px;
+        }
+
+        .plan-item {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .btn-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            border: none;
+            padding: 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: filter 0.2s;
+        }
+
+        .btn-link:hover {
+            filter: brightness(0.95);
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <!-- Sidebar Control Panel -->
+    <div class="sidebar">
+        <div class="sidebar-title">
+            <span class="material-icons">filter_alt</span>
+            <span>סינון מניות חכם</span>
+        </div>
+
+        <!-- Fundamental Filters -->
+        <div class="filter-section">
+            <div class="filter-section-title">סינון פונדמנטלי (כלכלי)</div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--primary)">monetization_on</span>
+                    <span>חברות רווחיות בלבד (P/E > 0)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="profitable-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--primary)">percent</span>
+                    <span>מכפיל רווח סביר (P/E < 35)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="pe-limit-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Technical Filters -->
+        <div class="filter-section">
+            <div class="filter-section-title">סינון טכני (גרף)</div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--success)">trending_up</span>
+                    <span>מחיר מעל ממוצע נע 200</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="ma-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+            <div class="toggle-row">
+                <div class="toggle-label">
+                    <span class="material-icons" style="color: var(--warning)">speed</span>
+                    <span>מניעת קניית יתר (RSI < 70)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="rsi-toggle" checked onchange="updateDashboard()">
+                    <span class="slider-switch"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Panel Feed -->
+    <div class="main-panel">
+        <div class="stats-banner">
+            <div class="stat-card">
+                <div class="stat-val" id="total-scanned">500</div>
+                <div class="stat-lbl">מניות נסרקו בסה"כ</div>
+            </div>
+            <div class="stat-card success-border">
+                <div class="stat-val" id="total-matches">3</div>
+                <div class="stat-lbl">עומדות בתנאי הסינון שלך</div>
+            </div>
+        </div>
+
+        <!-- Cards Feed -->
+        <div class="signals-grid" id="signals-container">
+            <!-- Simulated Signal Cards will load here -->
+        </div>
+    </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+    function updateDashboard() {
+        // בודק אם קובץ הנתונים (data.js) נטען בהצלחה מהבוט
+        if (typeof STOCK_DATABASE === 'undefined') {
+            const container = document.getElementById("signals-container");
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--on-surface-de-emphasis)">
+                    <span class="material-icons" style="font-size: 48px; margin-bottom: 10px;">hourglass_empty</span>
+                    <div style="font-size: 18px; font-weight: bold;">ממתין לנתונים...</div>
+                    <div style="margin-top: 10px;">הפעל את הבוט (main.py) כדי שיסרוק את השוק וייצור את קובץ הנתונים (data.js).<br>רענן את העמוד כשהוא יסיים!</div>
+                </div>
+            `;
+            document.getElementById("total-scanned").innerText = "500";
+            document.getElementById("total-matches").innerText = "0";
+            return;
+        }
+
+        const profitableOnly = document.getElementById("profitable-toggle").checked;
+        const peLimit = document.getElementById("pe-limit-toggle").checked;
+        const maOnly = document.getElementById("ma-toggle").checked;
+        const rsiLimit = document.getElementById("rsi-toggle").checked;
+
+        // Filter the database
+        const matches = STOCK_DATABASE.filter(stock => {
+            if (profitableOnly && stock.pe <= 0) return false;
+            if (peLimit && stock.pe > 35) return false;
+            if (maOnly && !stock.aboveMA200) return false;
+            if (rsiLimit && stock.rsi >= 70) return false;
+            return true;
+        });
+
+        // Update Stats
+        document.getElementById("total-matches").innerText = matches.length;
+
+        // Render Cards
+        const container = document.getElementById("signals-container");
+        container.innerHTML = "";
+
+        if (matches.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--on-surface-de-emphasis)">
+                    <span class="material-icons" style="font-size: 48px; margin-bottom: 10px;">info</span>
+                    <div>אין מניות שעונות על כל התנאים כרגע. נסה לרכך את הסינון.</div>
+                </div>
+            `;
+            return;
+        }
+
+        matches.forEach(stock => {
+            const card = document.createElement("div");
+            card.className = "signal-card";
+            
+            let badgeClass = stock.setup;
+            let setupText = stock.setupLabel;
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <span class="ticker-name">${stock.ticker}</span>
+                    <span class="badge ${badgeClass}">${setupText}</span>
+                </div>
+                <div style="font-size: 13px; color: var(--on-surface-de-emphasis)">${stock.name}</div>
+                <div class="price-row">
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">מחיר</div>
+                        <div style="font-weight: 700; font-size: 16px;">$${stock.price.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">RSI</div>
+                        <div style="font-weight: 700;">${stock.rsi}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--on-surface-de-emphasis)">מכפיל P/E</div>
+                        <div style="font-weight: 700;">${stock.pe.toFixed(1)}</div>
+                    </div>
+                </div>
+                <div class="trading-plan">
+                    <div style="font-weight: bold; margin-bottom: 5px;">🎯 תוכנית מסחר מוצעת:</div>
+                    <div class="plan-item">
+                        <span>יעד קרוב (TP1):</span>
+                        <span style="color: var(--success); font-weight: bold;">$${stock.tp1}</span>
+                    </div>
+                    <div class="plan-item">
+                        <span>יעד רחוק (TP2):</span>
+                        <span style="color: var(--success); font-weight: bold;">$${stock.tp2}</span>
+                    </div>
+                    <div class="plan-item">
+                        <span>קו הגנה (SL):</span>
+                        <span style="color: var(--error); font-weight: bold;">$${stock.sl}</span>
+                    </div>
+                </div>
+                ${stock.earnings && stock.earnings !== 'לא ידוע' && stock.earnings.includes('⚠️') ? `
+                <div style="margin-top: 12px; padding: 6px 10px; background: var(--warning-surface); color: var(--warning); border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 5px; font-weight: 500;">
+                    <span class="material-icons" style="font-size: 16px;">event</span>
+                    <span>${stock.earnings}</span>
+                </div>
+                ` : ''}
+                ${stock.newsTitle ? `
+                <div style="margin-top: 12px; padding: 10px; background: var(--surface-container-high); border-radius: 8px; font-size: 13px;">
+                    <div style="font-weight: bold; margin-bottom: 4px; color: var(--primary);">📰 חדשות חמות:</div>
+                    <a href="${stock.newsLink}" target="_blank" style="color: var(--on-surface-default); text-decoration: none;">${stock.newsTitle}</a>
+                </div>
+                ` : ''}
+                <a href="https://finance.yahoo.com/quote/${stock.ticker}/chart" target="_blank" class="btn-link" style="margin-top: 12px;">
+                    <span class="material-icons" style="font-size: 16px;">show_chart</span>
+                    <span>צפה בגרף מניה</span>
+                </a>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    // Initial load
+    updateDashboard();
+</script>
+</body>
+</html>
